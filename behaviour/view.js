@@ -78,7 +78,11 @@ AnimationTask.prototype.run = function() {
         self.finish();
       };
       var animation = Raphael.animation(this.attr, this.time, ">", compositeCallback);
-      this.element.show().stop().animate(animation);
+      try {
+        this.element.show().stop().animate(animation);
+      } catch (err) {
+          console.log("error with animation");
+      }
 };
 
 function CompositeAnimationTask(animationList) {
@@ -156,6 +160,32 @@ View.prototype = {
         $('#welcomeModal').modal('hide');
         self.showSplash();
       });
+    },
+
+    askCall: function(callback, gameObject, minCall) {
+        var self = this;
+        
+        console.log('typeof = ' + typeof minCall);
+        $('#minCallValue').html(minCall);
+        $('#inputCall').val(minCall);
+        $('#callModal').modal('show');
+        $('#passCall').click(function(event) {
+            event.preventDefault();
+            callback(gameObject, 0);
+            $('#callModal').modal('hide');
+        });
+        $('#formCall').submit(function(event) {
+            event.preventDefault();
+            var call =  parseInt($('#inputCall').val());
+            console.log('typeof call = ' + typeof call);
+            if (call >= parseInt(minCall)) {
+                callback(gameObject, call);
+                $('#callModal').modal('hide');
+            }
+            else {
+                alert("too low call");
+            }
+        });
     },
 
     drawProgressOverlay: function() {
@@ -343,7 +373,7 @@ View.prototype = {
   },
 
   drawTrumpSuit: function(trumpSuit) {
-    var content = "Troef"; 
+    var content = "Trump"; 
     var trumpSuitText = this.getCanvas().text(constants.TRUMPSUIT_PADDING, constants.TRUMPSUIT_PADDING, content);
     trumpSuitText.attr({'font-size': 20,'text-anchor': 'start','fill': '#fff','font-family' : conf.font, 'font-weight' : 'bold'});
     var iconImage = this.getSuitImageFile(trumpSuit);
@@ -470,7 +500,7 @@ View.prototype = {
         if (index == 0) {
           this.drawHumanPlayerCards(cards);
         } else {
-          this.drawOtherPlayerCards(index, 5);
+          this.drawOtherPlayerCards(index, 4);
         }
       }
   },
@@ -480,11 +510,11 @@ View.prototype = {
 
     if (cards.length == 0) {
       return;
-    } else if (cards.length == 5) {
-      this.drawDealCards(cards, playingOrder, 5);
+    } else if (cards.length == 4) {
+      this.drawDealCards(cards, playingOrder, 4);
     } else {
       var i;
-      var offset = 5;
+      var offset = 4;
       var step = 4;
       for (i=0; i < 2; i++) {
         var start = offset + i * step;
@@ -540,6 +570,11 @@ View.prototype = {
     this.repository.clearCategory('playerMoves');
   },
 
+  clearAnimationQueue: function() {
+    this.taskQueue.q = [];
+    this.taskQueue.state = "INITIALIZED";
+  },
+
   getCardId: function(card, category) {
     var id = category + "_" + card.rank + "_" + card.suit;
     return id;
@@ -562,14 +597,18 @@ View.prototype = {
     var cardImage = this.getCanvas().image(this.getCardImageFile(card.rank, card.suit), x, y, width, height);
 
     cardImage.mouseover(function(event) {
-        this.translate(0,-1*constants.CARD_HEIGHT);
-        this.attr({'height': constants.CARD_HEIGHT * 2, 'width': constants.CARD_WIDTH * 2});
-        this.toFront();
+        try {
+            this.translate(0,-1*constants.CARD_HEIGHT);
+            this.attr({'height': constants.CARD_HEIGHT * 2, 'width': constants.CARD_WIDTH * 2});
+            this.toFront();
+        } catch (err) {}
     });
     cardImage.mouseout(function(event) {
-        this.translate(0,constants.CARD_HEIGHT);
-        this.attr({'height': constants.CARD_HEIGHT, 'width': constants.CARD_WIDTH});
-        self.clearError();
+        try {
+            this.translate(0,constants.CARD_HEIGHT);
+            this.attr({'height': constants.CARD_HEIGHT, 'width': constants.CARD_WIDTH});
+            self.clearError();
+        } catch (err) {}
     });
 
     cardImage.click(function(event) {

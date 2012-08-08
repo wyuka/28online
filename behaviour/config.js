@@ -4,12 +4,12 @@
  * External configuration file. 
  */ 
 var conf = {
-  lang: 'nl',
+  lang: 'en',
 
   font: 'Ubuntu',	
 
 	network: {
-    wsURL : 'ws://nagazuka.nl:8080/websocket'
+    wsURL : 'ws://0.0.0.0:8080/websocket'
 	},
   
   imageDir: 'images/',
@@ -27,8 +27,8 @@ var conf = {
   flagDir: 'images/flags/64/', 
   flagSmallDir: 'images/flags/32/', 
   teamFlags: {
-    'Team Suriname': 'Suriname.png',
-    'Team Nederland': 'Netherlands.png'
+    'Team A': 'Suriname.png',
+    'Team B': 'Netherlands.png'
   },
 	
 	// my skins

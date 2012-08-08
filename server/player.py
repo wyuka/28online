@@ -15,7 +15,7 @@ class Player:
         return self.cards[0].suit
 
     @staticmethod
-    def chooseCutPosition(deckSize=52):
+    def chooseCutPosition(deckSize=32):
         return random.randint(1, deckSize)
 
     def addCard(self, card=None):

@@ -12,6 +12,9 @@ function Game() {
     this.playerName = null;
     this.playerTeam = null;
     this.cpuTeam = null;
+    this.humanId = null;
+    this.firstHand = null;
+    this.firstCard = null;
 }
 
 Game.prototype = {
@@ -30,15 +33,31 @@ Game.prototype = {
     this.handler.sendMessage({'command' : 'nextGame', 'playerName' : this.playerName, 'playerTeam': this.playerTeam, 'opponentTeam': this.cpuTeam});
   },
 
+  getGameInfo: function() {
+    this.handler.sendMessage({'command' : 'getGameInfo'});
+  },
+  
   askFirstCards: function fn_askFirstCards () {
     this.handler.sendMessage({ 'command' : 'dealFirstCards', 'playerId' : this.humanPlayer.id});
+  },
+
+  sendReadyForCall: function() {
+    this.handler.sendMessage({ 'command' : 'readyForCall', 'playerId' : this.humanPlayer.id});
+  },
+
+  makeCall: function (self, call) {
+    self.handler.sendMessage({ 'command' : 'makeCall', 'playerId' : self.humanPlayer.id, 'call' : call});
   },
 
   chooseTrump: function fn_chooseTrump (card) {
     this.trumpSuit = card.suit;
     this.handler.sendMessage({'command' : 'chooseTrump', 'suit': card.suit, 'playerId' : this.humanPlayer.id});
   },
-  
+
+  askAllCards: function () {
+      this.handler.sendMessage({ 'command' : 'dealAllCards', 'playerId' : this.humanPlayer.id});
+  },
+
   makeMove: function fn_makeMove (card) {
     this.handler.sendMessage({'command' : 'makeMove', 'rank' : card.rank, 'suit': card.suit, 'playerIndex' : 0, 'playerId' : this.humanPlayer.id});
     this.selectedCard = card;
@@ -46,11 +65,11 @@ Game.prototype = {
   },
 
   noAction: function fn_noAction (card) {
-    this.view.drawText('Nu even niet :-)\nChill for a bit amigo...');
+    this.view.drawText('Not now.\nChill for a bit ...', '');
   },
 
   sendReady: function() {
-    this.handler.sendMessage({'command' : 'isReady'});
+    this.handler.sendMessage({'command' : 'isReady', 'playerId' : this.humanPlayer.id});
   },
 
   addCards: function(newCards) {
@@ -131,6 +150,7 @@ Game.prototype = {
 
     _.each(moves, function(move, index, list) {
       if (move.sequenceNumber > currentStep) {
+        console.log("bilkul bakchod " + move.getCard().rank);
         self.playerMoves.push(move);
         self.view.drawPlayerMove(move);
       }
@@ -149,47 +169,103 @@ Game.prototype = {
     this.addCards(cards);
     this.view.drawDeck();
     this.view.drawPlayerCards(this.cards, this.playingOrder);
-    this.drawText(messages[conf.lang].chooseTrumpHeading, "");
-    this.setCardClickHandler(this.chooseTrump);
+    this.sendReadyForCall();
   },
 
-  handleAllCards: function(cards, trumpSuit) {
-    this.drawTrumpSuit(trumpSuit);
+  handleAskCall: function(minCall) {
+      this.view.askCall(this.makeCall, this, minCall);
+  },
+
+  handleCallMade: function(playerId, call) {
+    if (playerId == this.humanPlayer.id) {
+        if (call == 'pass')
+            this.drawText(messages[conf.lang].youPassed, "");
+        else
+            this.drawText(messages[conf.lang].youMadeCall + call, "");
+    } else {
+        var player = this.getPlayerById(playerId);
+        if (call == 'pass')
+            this.drawText(player.getName() + messages[conf.lang].otherPassed, "");
+        else
+            this.drawText(player.getName() + messages[conf.lang].otherMadeCall + call, "");
+    }
+    this.sendReadyForCall();
+  },
+
+  handleCallWon: function(playerId, call) {
+      if (playerId == this.humanPlayer.id) {
+          this.drawText(messages[conf.lang].youWinCall + call, messages[conf.lang].chooseTrumpHeading);
+          this.setCardClickHandler(this.chooseTrump);
+      }
+      else {
+          var player = this.getPlayerById(playerId);
+          this.drawText(player.getName() + messages[conf.lang].otherWinsCall + call, "");
+      }
+  },
+
+  handleTrumpChosen: function() {
+      this.drawText("","");
+      this.setCardClickHandler(this.noAction);
+      this.askAllCards();
+  },
+  
+  handleAllCards: function(cards) {
     this.addCards(cards);
     this.view.drawPlayerCards(this.cards, this.playingOrder);
     this.view.clearDeck();
+    this.firstCard = true;
+    this.firstHand = true;
     this.sendReady();
   },
 
-  handleAskMove: function (playerMoves) {
-    this.clearMoves();
-    this.addAndDrawMoves(playerMoves);
-
-    this.drawText(messages[conf.lang].yourTurn, "");
+  handleAskMove: function () {
+    if (this.firstCard == true && this.firstHand == false) {
+        this.drawText(messages[conf.lang].youWinHand + "\n" + messages[conf.lang].yourTurn, "");
+    }
+    else {
+        this.drawText(messages[conf.lang].yourTurn, "");
+    }
     this.setCardClickHandler(this.makeMove);
   },
-  
+
   handleInvalidMove: function (response) {
     this.drawError(messages[conf.lang].invalidMoveHeading, messages[conf.lang].invalidMove); 
     this.setCardClickHandler(this.makeMove);
   },
 
-  handleHandPlayed: function (playerMoves, winningPlayerId, scores) {
-    this.removeSelectedCard();
-    this.clearError();
+  handleMoveMade: function (playerMoves, playerId) {
+    if (this.firstCard == true && this.firstHand == false) {
+        this.clearMoves();
+        this.view.clearAnimationQueue();
+        this.firstCard = false;
+    }
+    if (playerId == this.humanPlayer.id) {
+        console.log("move successful");
+        this.removeSelectedCard();
+        this.clearError();
+    }
 
+    this.drawText("", "");
     this.addAndDrawMoves(playerMoves);
+    this.sendReady();
+  },
+
+  handleHandPlayed: function (winningPlayerId, scores) {
 
     var winningPlayer = this.getPlayerById(winningPlayerId);
     if (winningPlayer.id == this.humanPlayer.id) {
-      this.drawText(messages[conf.lang].youWinHand, messages[conf.lang].clickToAdvance);
+      this.drawText(messages[conf.lang].youWinHand, "");
     } else {
-      this.drawText(winningPlayer.name + messages[conf.lang].otherWinsHand, messages[conf.lang].clickToAdvance);
+      this.drawText(winningPlayer.name + messages[conf.lang].otherWinsHand, "");
     }
-    
+
     this.updateScores(scores);
-    this.view.waitForNextHand();
-  },  
+    this.firstCard = true;
+    this.firstHand = false;
+    this.sendReady();
+    //this.view.waitForNextHand();
+    //this.clearMoves();
+  },
 
   handleGameDecided: function (winningTeam, scores) {
     this.drawText(messages[conf.lang].gameDecided + winningTeam, "");

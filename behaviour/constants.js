@@ -63,7 +63,7 @@ function Constants() {
   this.SCORE_FONT_SIZE = 20;
   this.SCORE_TEXT_PADDING = 15;
   this.SUIT_TRANSLATION_TABLE = { 'DIAMONDS' : 'd', 'CLUBS' : 'c', 'SPADES' : 's', 'HEARTS' : 'h'};
-  this.RANK_TRANSLATION_TABLE = [undefined, undefined, '2', '3', '4', '5', '6', '7', '8', '9', '10', 'j', 'q', 'k', 'a'];
+  this.RANK_TRANSLATION_TABLE = [undefined, undefined, '2', '3', '4', '5', '6', '7', '8', 'q', 'k', '10', 'a', '9', 'j'];
 }
 
 var constants = new Constants();

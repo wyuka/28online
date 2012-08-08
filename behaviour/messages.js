@@ -1,21 +1,27 @@
 'use strict';
 
 var messages = {
-  nl: {
-    noWebSocketSupport: 'Deze browser ondersteunt geen WebSocket.',
-    chooseTrumpHeading:  'Kies je troef',
-    chooseTrump:  'Klik 1 van je kaarten aan om de troef te kiezen.',
-    yourTurn:  'Jij bent aan de beurt...',
-    youWinHand:  'Jij hebt deze hand gemaakt!',
-    otherWinsHand: '\nheeft deze hand gemaakt!',
-    errorMessage:  'Ai ai ai!\nEr is een fout opgetreden.',
-    invalidMoveHeading:  'Ongeldige kaart!',
-    invalidMove:  'Kies een andere kaart om verder\nte spelen',
-    playerPrefix:  'Anoniem',
-    score:  'Stand',
-    clickToAdvance:  'Klik om door te gaan...',
-    clickToStart:  'Klik om te beginnen...',
-    gameDecided: "Spel afgelopen!.\n Winaar is ",
-    gameTitle:  'TroefCall Online'
+  en: {
+    noWebSocketSupport: 'This browser does not support websockets.',
+    otherPassed: '\npassed',
+    youPassed: 'You passed',
+    otherMadeCall: '\nmade a call of ',
+    youMadeCall: 'You made a call of ',
+    otherWinsCall: '\nwins the call at ',
+    youWinCall: 'You win the call at ',
+    chooseTrumpHeading:  'Choose the trump',
+    chooseTrump:  'Choose a trump card from the cards dealt.',
+    yourTurn:  'Your turn...',
+    youWinHand:  'You win this hand',
+    otherWinsHand: '\nwins this hand!',
+    errorMessage:  'Error!',
+    invalidMoveHeading:  'Invalid Move.',
+    invalidMove:  'This move is not valid.',
+    playerPrefix:  'Mr.',
+    score:  'Score',
+    clickToAdvance:  'Click to advance...',
+    clickToStart:  'Click to begin...',
+    gameDecided: "Game decided.\n Winner is ",
+    gameTitle:  '28 Online'
   }
 };

@@ -60,8 +60,8 @@ Application.prototype = {
     this.view.setGame(this.game);
     this.messageHandler.setGame(this.game);
     
-    this.game.setPlayerTeam("Team Suriname");
-    this.game.setCpuTeam("Team Nederland");
+    this.game.setPlayerTeam("Team A");
+    this.game.setCpuTeam("Team B");
 
     var playerName = this.getStoredValue('playerName');
 

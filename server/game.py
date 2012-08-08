@@ -13,13 +13,13 @@ class ScoreKeeper:
             self.playerScore[player.name] = 0
             self.teamScore[player.team] = 0
 
-    def registerWin(self, player):
-        self.teamScore[player.team] = self.teamScore[player.team] + 1
-        self.playerScore[player.name] = self.playerScore[player.name] + 1
+    def registerWin(self, player, points):
+        self.teamScore[player.team] = self.teamScore[player.team] + points
+        self.playerScore[player.name] = self.playerScore[player.name] + points
 
     def isGameDecided(self):
         for score in self.teamScore.values():
-            if score > 6:
+            if score > 27:
                 return True
         return False
 
@@ -33,6 +33,16 @@ class ScoreKeeper:
     def getScores(self):
         return {"teamScore": self.teamScore, "playerScore": self.playerScore}
 
+class Call:
+    def __init__(self, players=None):
+        try:
+            self.players = players
+            self.playerToCall = self.players[1]
+            self.playerToStay = self.players[0]
+            self.currentCall = 16
+            self.currentCaller = self.players[0]
+        except:
+            pass
 
 class CardGame:
 
@@ -44,6 +54,17 @@ class CardGame:
         self.state = "INITIALIZED"
         self.trumpSuit = None
         self.playingOrder = []
+
+        # call variables
+        self.minCall = 0
+        self.callTurn = 0
+        self.stayTurn = 0
+        self.callStatus = ''
+        self.highestCaller = None
+        self.highestCall = 0
+        self.numberOfPasses = 0
+        self.callWon = False
+        self.firstCall = False
 
     @staticmethod
     def createDeck():
@@ -59,6 +80,17 @@ class CardGame:
             else:
                 return card2
         return reduce(getHigherCard, cards)
+
+    def initCall(self):
+        self.highestCaller = self.players[0]
+        self.highestCall = 16
+        self.minCall = 16
+        self.stayTurn = 0
+        self.callTurn = 0
+        self.callStatus = 'stay'
+        self.numberOfPasses = 0
+        self.callWon = False
+        self.firstCall = True
 
     def getStartingPlayer(self):
         return self.players[self.startingPlayerIndex]
@@ -86,7 +118,7 @@ class CardGame:
 
     def dealFirstCards(self):
         for player in self.getPlayersInOrder():
-            firstCards = self.deck.removeCards(5)
+            firstCards = self.deck.removeCards(4)
             player.addCards(firstCards)
 
     def chooseTrump(self, trumpSuit):

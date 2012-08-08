@@ -54,16 +54,23 @@ MessageHandler.prototype = {
     this[handlerName](json);
   },
   
-  startGame: function (response) {
-    var self = this;
-    var playerList = response.players;
-    this.game.playingOrder = response.playingOrder;
-    _.each(response.players, function (p) {
-      var player = new Player(p.id, p.index, p.name, p.isHuman, p.team);
-      self.game.addPlayer(player);
-      self.game.drawPlayer(player);
-    });
-    this.game.askFirstCards();
+  joinedGame: function (response) {
+      this.game.humanId = response.id;
+      console.log("joinedGame called, humanId is " + this.game.humanId);
+      this.game.getGameInfo();
+  },
+  gameInfo: function (response) {
+      var self = this;
+      var playerList = response.players;
+      this.game.playingOrder = response.playingOrder;
+      _.each(response.players, function (p) {
+          var isHuman = (p.id == self.game.humanId);
+          var index = (p.index + 4 - self.game.humanId) % 4;
+          var player = new Player(p.id, index, p.name, isHuman, p.team);
+          self.game.addPlayer(player);
+          self.game.drawPlayer(player);
+      });
+      this.game.askFirstCards();
   },
 
   nextGame: function(response) {
@@ -75,27 +82,46 @@ MessageHandler.prototype = {
     this.game.handleFirstCards(cards);
   },
 
+  callMade: function (response) {
+      this.game.handleCallMade(response.id, response.call);
+  },
+
+  askCall: function (response) {
+      this.game.handleAskCall(response.minCall);
+  },
+
+  callWon: function (response) {
+      this.game.handleCallWon(response.playerId, response.call);
+  },
+
+  trumpChosen: function (response) {
+      this.game.handleTrumpChosen();
+  },
+
   allCards: function (response) {
     var cards = this.transformCards(response.cards);
-    var trumpSuit = response.trumpSuit
-    this.game.handleAllCards(cards, trumpSuit);
+    this.game.handleAllCards(cards);
   },
 
   askMove: function (response) {
-    var playerMoves = this.transformPlayerMoves(response.hand);
-    this.game.handleAskMove(playerMoves);
+    //var playerMoves = this.transformPlayerMoves(response.hand);
+    this.game.handleAskMove();
   },
 
   invalidMove: function (response) {
     this.game.handleInvalidMove();
   },
 
-  handPlayed: function (response) {
+  moveMade: function (response) {
     var playerMoves = this.transformPlayerMoves(response.hand);
+    this.game.handleMoveMade(playerMoves, response.id);
+  },
+
+  handPlayed: function (response) {
     var winningPlayerId = response.winningPlayerId;
     var scores = response.scores;
 
-    this.game.handleHandPlayed(playerMoves, winningPlayerId, scores);
+    this.game.handleHandPlayed(winningPlayerId, scores);
   },
 
   gameDecided: function (response) {

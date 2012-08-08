@@ -16,53 +16,128 @@ class GameServer:
         self.cardGame = None
         self.scores = None
         self.hand = None
+        self.handlerQueue = []
+        self.readyQueue = []
+        self.gameStarted = False
 
-    def setWriter(self, writer):
-        self.writer = writer
+    def addWriter(self, writer):
+        self.writers.append(writer)
 
-    @staticmethod
-    def createPlayers(playerName="John Doe", team1Name="Team Suriname", team2Name="Team Nederland"):
-        p1 = HumanPlayer(1, playerName, team1Name)
-        p2 = Player(2, "Bob Marley", team1Name)
-        p3 = Player(3, "Tupac Shakur", team2Name)
-        p4 = Player(4, "Jimi Hendrix", team2Name)
-        return [p1, p3, p2, p4]
+    def startGame(self, handler, req):
+        nr = len(self.players)
+        if nr == 4:
+            message = {'response': 'roomFull'}
+            logging.debug("Room is full")
+            handler.sendMessage(message)
+        else:
+            if nr % 2 == 0:
+                teamName = "Team A"
+            else:
+                teamName = "Team B"
+            #player = Player(nr, req['playerName'], teamName)
+            #FIXME: uncomment the previous line, just debugging
+            player = HumanPlayer(nr, nr, teamName)
+            self.players.append(player)
+            self.handlerQueue.append(handler)
+            if len(self.players) == 4:
+                self.cardGame = CardGame(self.players)
+                self.scores = ScoreKeeper(self.players)
+                self.cardGame.startingPlayerIndex = 0
+                self.cardGame.setPlayingOrder()
+                self.gameStarted = True
+                self.cardGame.dealFirstCards()
+                self.cardGame.initCall()
+            message = {'response': 'joinedGame', 'id': nr, 'name' : req['playerName'], 'team': teamName}
+            logging.debug("%s added to room", req['playerName'])
+            handler.sendMessage(message)
 
-    def startGame(self, req):
-        jsonResponse = {'response': 'startGame'}
-        try:
-            playerName = req['playerName']
-            playerTeam = req['playerTeam']
-            opponentTeam = req['opponentTeam']
-            self.players = GameServer.createPlayers(playerName, playerTeam, opponentTeam)
-            self.cardGame = CardGame(self.players)
-            self.scores = ScoreKeeper(self.players)
-
-            jsonResponse['resultCode'] = 'SUCCESS'
-
-            #self.cardGame.decideOrder()
-            # override to set humanplayer as first
-            self.cardGame.startingPlayerIndex = 0
-            self.cardGame.setPlayingOrder()
-
+    def getGameInfo(self, handler, req):
+        if self.gameStarted:
+            message = {'response': 'gameInfo'}
             playersList = []
             i = 0
             for player in self.cardGame.getPlayers():
                 playersList.append({'index': i, 'name': player.name,
-                                    'id': player.id, 'team': player.team,
-                                    'isHuman': isinstance(player,
-                                                          HumanPlayer)})
+                                    'id': player.id, 'team': player.team})
                 i = i + 1
 
-            jsonResponse['players'] = playersList
-            jsonResponse['playingOrder'] = self.cardGame.getOrder()
-            jsonResponse['gameId'] = str(self.cardGame.id)
+            message['players'] = playersList
+            message['playingOrder'] = self.cardGame.getOrder()
+            message['gameId'] = str(self.cardGame.id)
 
+            self.broadcast(message)
+
+    def dealFirstCards(self, handler, request):
+        response = {'response': 'dealFirstCards'}
+        try:
+            player = self.cardGame.getPlayerById(request['playerId'])
+            firstCards = player.getCards()
+            logging.debug("Total nr of cards: %s", len(firstCards))
+
+            response['cards'] = [{'rank': card.rank, 'suit': card.suit}
+                           for card in firstCards]
         except Exception as ex:
             self.writer.sendError(ex)
             raise
 
-        self.writer.sendMessage(jsonResponse)
+        handler.sendMessage(response)
+
+    def readyForCall(self, handler, request):
+        if self.cardGame.callWon:
+            response = {'response': 'callWon'}
+            response['call'] = self.cardGame.highestCall
+            response['playerId'] = self.cardGame.highestCaller.id
+            handler.sendMessage(response)
+        else:
+            player = self.cardGame.getPlayerById(request['playerId'])
+            if player == self.cardGame.players[self.cardGame.callTurn]:
+                response = {'response': 'askCall', 'minCall': self.cardGame.minCall}
+                handler.sendMessage(response)
+
+    def makeCall(self, handler, request):
+        response = {'response': 'callMade'}
+        player = self.cardGame.getPlayerById(request['playerId'])
+        if player == self.cardGame.players[self.cardGame.callTurn]:
+            response['id'] = player.id
+            callValue = int(request['call'])
+            # if passed
+            if callValue == 0:
+                self.cardGame.numberOfPasses += 1
+                response['call'] = 'pass'
+                if self.cardGame.firstCall == True:
+                    self.cardGame.callTurn = (self.cardGame.stayTurn + 1) % 4
+                    self.cardGame.stayTurn = self.cardGame.callTurn
+                else:
+                    if self.cardGame.callStatus == 'stay':
+                        self.cardGame.callTurn = (self.cardGame.stayTurn + 1) % 4
+                        self.cardGame.minCall += 1
+                        self.cardGame.callStatus = 'challenge'
+                    elif self.cardGame.callStatus == 'challenge':
+                        self.cardGame.callTurn = (self.cardGame.callTurn + 1) % 4
+            # if not passed
+            elif callValue >= self.cardGame.minCall:
+                response['call'] = request['call']
+                self.cardGame.highestCall = callValue
+                self.cardGame.highestCaller = player
+                # first call
+                if self.cardGame.firstCall == True:
+                    self.cardGame.minCall = callValue + 1
+                    self.cardGame.stayTurn = self.cardGame.callTurn
+                    self.cardGame.callTurn = (self.cardGame.callTurn + 1) % 4
+                    self.cardGame.firstCall = False
+                    self.cardGame.callStatus = 'challenge'
+                else:
+                    if self.cardGame.callStatus == 'stay':
+                        self.cardGame.minCall = callValue + 1
+                        self.cardGame.callTurn, self.cardGame.stayTurn = self.cardGame.stayTurn, self.cardGame.callTurn
+                        self.cardGame.callStatus = 'challenge'
+                    elif self.cardGame.callStatus == 'challenge':
+                        self.cardGame.minCall = callValue
+                        self.cardGame.callTurn, self.cardGame.stayTurn = self.cardGame.stayTurn, self.cardGame.callTurn
+                        self.cardGame.callStatus = 'stay'
+            if self.cardGame.callTurn == 0 and self.cardGame.callStatus == 'challenge':
+                self.cardGame.callWon = True
+            self.broadcast(response)
 
     def nextGame(self, req):
         jsonResponse = {'response': 'nextGame'}
@@ -78,44 +153,31 @@ class GameServer:
 
         self.writer.sendMessage(jsonResponse)
 
-    def dealFirstCards(self, request):
-        response = {'response': 'dealFirstCards'}
-        try:
-            self.cardGame.dealFirstCards()
-            player = self.cardGame.getPlayerById(request['playerId'])
-            firstCards = player.getCards()
-            logging.debug("Total nr of cards: %s", len(firstCards))
+    
 
-            response['cards'] = [{'rank': card.rank, 'suit': card.suit}
-                           for card in firstCards]
-        except Exception as ex:
-            self.writer.sendError(ex)
-            raise
-
-        self.writer.sendMessage(response)
-
-    def chooseTrump(self, request):
-        response = {'response': 'allCards'}
+    def chooseTrump(self, handler, request):
+        response = {'response': 'trumpChosen'}
+        if self.cardGame.getPlayerById(request['playerId']) != self.cardGame.highestCaller:
+            return
         try:
             trumpSuit = request['suit']
             self.cardGame.chooseTrump(trumpSuit)
             self.cardGame.dealCards()
-
-            player = self.cardGame.getPlayerById(request['playerId'])
-            allCards = player.getCards()
-            logging.debug("Total nr of cards: %s", len(allCards))
-            response['cards'] = [{'rank': card.rank, 'suit': card.suit}
-                               for card in allCards]
-            response['trumpSuit'] = trumpSuit
-
-            self.writer.sendMessage(response)
-
+            self.hand = HandInfo()
+            self.broadcast(response)
         except Exception as ex:
-            self.writer.sendError(ex)
             raise
 
+    def dealAllCards(self, handler, request):
+        response = {'response': 'allCards'}
+        player = self.cardGame.getPlayerById(request['playerId'])
+        allCards = player.getCards()
+        logging.debug("Total nr of cards: %s", len(allCards))
+        response['cards'] = [{'rank': card.rank, 'suit': card.suit}
+                            for card in allCards]
+        handler.sendMessage(response)
 
-    def askPlayers(self):
+    def askPlayers(self, handler):
         jsonResponse = {'response': 'handPlayed'}
         trumpSuit = self.cardGame.trumpSuit
 
@@ -129,7 +191,7 @@ class GameServer:
                 message = {}
                 message['response'] = 'askMove'
                 message['hand'] = self.hand
-                self.writer.sendMessage(message)
+                handler.sendMessage(message)
                 break
             else:
                 card = player.getNextMove(self.hand, trumpSuit)
@@ -138,11 +200,13 @@ class GameServer:
 
         if self.hand.isComplete():
             winningMove = self.hand.decideWinner(trumpSuit)
+            pointsWon = self.hand.getHandPoints()
             winningPlayer = winningMove.getPlayer()
+            self.readyQueue = []
 
             logging.debug("Winner is %s\n", winningPlayer)
 
-            self.scores.registerWin(winningPlayer)
+            self.scores.registerWin(winningPlayer, pointsWon)
             scores = self.scores.getScores()
 
             self.cardGame.changePlayingOrder(winningPlayer)
@@ -153,7 +217,33 @@ class GameServer:
             jsonResponse['scores'] = scores
             self.writer.sendMessage(jsonResponse)
 
-    def makeMove(self, req):
+    def isReady(self, handler, request):
+        if self.hand.isComplete() == False:
+            player = self.cardGame.getNextPlayer(self.hand.getStep())
+            if player.id == request['playerId']:
+                message = {}
+                message['response'] = 'askMove'
+                handler.sendMessage(message)
+        else:
+            winningMove = self.hand.decideWinner(self.cardGame.trumpSuit)
+            pointsWon = self.hand.getHandPoints()
+            winningPlayer = winningMove.getPlayer()
+            self.hand = HandInfo()
+
+            logging.debug("Winner is %s\n", winningPlayer)
+
+            self.scores.registerWin(winningPlayer, pointsWon)
+            scores = self.scores.getScores()
+
+            self.cardGame.changePlayingOrder(winningPlayer)
+
+            message = {'response' : 'handPlayed'}
+            message['winningCard'] = winningMove.card
+            message['winningPlayerId'] = winningPlayer.id
+            message['scores'] = scores
+            self.broadcast(message)
+
+    def makeMove(self, handler, req):
         try:
             player = self.cardGame.getPlayerById(req['playerId'])
             playedCard = Card(req['suit'], req['rank'])
@@ -162,17 +252,30 @@ class GameServer:
             validMove = self.hand.validatePlayerMove(playerMove, self.cardGame.trumpSuit)
             if not validMove:
                 response = {'response': 'invalidMove', 'playerId': req['playerId']}
-                self.writer.sendMessage(response)
+                handler.sendMessage(response)
             else:
                 self.hand.addPlayerMove(playerMove)
                 player.removeCard(playedCard)
-                self.askPlayers()
+                message = {}
+                message['response'] = 'moveMade'
+                message['hand'] = self.hand
+                message['id'] = player.id
+                self.broadcast(message)
 
         except Exception as ex:
             self.writer.sendError(ex)
             raise
 
-    def isReady(self, req):
+    def isReady_old(self, handler, req):
+        self.readyQueue.append(handler)
+        if len(self.readyQueue) >= 4:
+            self.isReady_all()
+
+    def broadcast(self, message):
+        for handler in self.handlerQueue:
+            handler.sendMessage(message)
+
+    def isReady_all(self):
         try:
             if self.scores.isGameDecided():
                 scores = self.scores.getScores()
@@ -180,13 +283,12 @@ class GameServer:
                 self.cardGame.processWin(winningTeam)
                 response = {'response': 'gameDecided', 'scores': scores,
                             'winningTeam': winningTeam}
-                self.writer.sendMessage(response)
+                self.broadcast(response)
             else:
                 self.hand = HandInfo()
-                self.askPlayers()
 
         except Exception as ex:
-            self.writer.sendError(ex)
+            #self.writer.sendError(ex)
             raise
 
 class MainHandler(tornado.web.RequestHandler):
@@ -206,22 +308,26 @@ class MessageHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         logging.info("Websocket opened")
 
-        self.gameServer = GameServer()
-        writer = MessageWriter(self)
-        self.gameServer.setWriter(writer)
+        self.writer = MessageWriter(self)
+
+    def sendMessage(self, message):
+        self.writer.sendMessage(message)
 
     def on_message(self, message):
+        global gameServer
         req = tornado.escape.json_decode(message)
         logging.debug("Message received: %s", req)
         methodName = req['command']
-        if hasattr(self.gameServer, methodName):
-            getattr(self.gameServer, methodName)(req)
+        if hasattr(gameServer, methodName):
+            getattr(gameServer, methodName)(self, req)
         else:
             logging.error("Received unknown command [%s]", methodName)
 
     def on_close(self):
         logging.info("Websocket closed")
         self.gameServer = None
+
+gameServer = None
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, 

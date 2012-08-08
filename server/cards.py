@@ -18,6 +18,24 @@ class Card:
     def getSuit(self):
         return self.suit
 
+    def getPoints(self):
+        if self.rank == 14:
+            return 3
+        elif self.rank == 13:
+            return 2
+        elif self.rank == 12 or self.rank == 11:
+            return 1
+        else:
+            return 0
+
+    def __lt__(self, other):
+        if (other == None):
+            return False
+        elif self.rank < other.rank:
+            return True
+        else:
+            return False
+
     def __eq__(self, other):
         if (other == None):
           return False
@@ -31,7 +49,7 @@ class Deck:
 
     @staticmethod
     def createDeck():
-        values = range(2, 15)
+        values = range(7, 15)
         suits = ["SPADES", "CLUBS", "HEARTS", "DIAMONDS"]
 
         deck = []
@@ -150,3 +168,9 @@ class HandInfo:
                 logging.debug("CUT WITH TRUMP!")
 
         return winningMove
+
+    def getHandPoints(self):
+        totalPoints = 0
+        for move in self.playerMoves:
+            totalPoints += move.getCard().getPoints()
+        return totalPoints
